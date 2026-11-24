@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>时空穿梭：大马历史大闯关 (六年级历史)</title>
+    <!-- 引入 Tailwind CSS 进行快速响应式排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Google Fonts 提升中文字体美感 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- 引入 Tone.js 制作趣味游戏音效（无需外部音频链接） -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background: linear-gradient(135deg, #1e3a8a 0%, #312e81 50%, #4c1d95 100%);
+            min-height: 100vh;
+            user-select: none;
+            overflow-x: hidden;
+        }
+        /* 游戏卡片动画与微光效果 */
+        .game-card {
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-bounce {
+            transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
+        }
+        .btn-bounce:hover {
+            transform: translateY(-3px) scale(1.02);
+        }
+        .btn-bounce:active {
+            transform: translateY(1px) scale(0.98);
+        }
+        /* 连连看选中与配对动画 */
+        .match-item {
+            transition: all 0.25s ease;
+        }
+        .match-selected {
+            background-color: #fef08a !important;
+            border-color: #eab308 !important;
+            transform: scale(1.04);
+            box-shadow: 0 0 15px rgba(234, 179, 8, 0.5);
+        }
+        .match-solved {
+            background-color: #bbf7d0 !important;
+            border-color: #22c55e !important;
+            opacity: 0.6;
+            pointer-events: none;
+            transform: scale(0.95);
+        }
+        .match-error {
+            animation: shake 0.4s ease-in-out;
+            background-color: #fecaca !important;
+            border-color: #ef4444 !important;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            50% { transform: translateX(6px); }
+            75% { transform: translateX(-6px); }
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+        }
+        .floating {
+            animation: float 3s ease-in-out infinite;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center p-3 sm:p-6 text-slate-800">
+
+    <!-- 顶部状态栏 (在游戏开始后显示) -->
+    <header id="top-hud" class="hidden w-full max-w-4xl mb-4 flex flex-wrap items-center justify-between gap-2 bg-white/15 backdrop-blur-md border border-white/20 text-white px-4 py-3 rounded-2xl shadow-lg">
+        <div class="flex items-center gap-3">
+            <button onclick="returnToMenu()" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-xl text-sm font-bold flex items-center gap-1 transition">
+                🏠 <span>大厅</span>
+            </button>
+            <div id="hud-level-title" class="font-bold text-base sm:text-lg text-amber-300">第一关</div>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-1 bg-black/25 px-3 py-1 rounded-xl">
+                <span class="text-red-400 text-lg">❤️</span>
+                <span id="hud-lives" class="font-black text-lg">3</span>
+            </div>
+            <div class="flex items-center gap-1 bg-black/25 px-3 py-1 rounded-xl">
+                <span class="text-amber-400 text-lg">⭐</span>
+                <span id="hud-score" class="font-black text-lg">0</span>
+            </div>
+            <button id="sound-toggle" onclick="toggleSound()" class="bg-white/20 hover:bg-white/30 p-2 rounded-xl text-sm" title="开关音效">
+                🔊
+            </button>
+        </div>
+    </header>
+
+    <!-- 主游戏容器 -->
+    <main class="w-full max-w-4xl">
+
+        <!-- ==================== 0. 欢迎与关卡选择大厅 ==================== -->
+        <section id="screen-menu" class="game-card rounded-3xl p-6 sm:p-10 text-center">
+            <div class="inline-block bg-amber-100 text-amber-800 font-bold px-4 py-1.5 rounded-full text-xs sm:text-sm mb-3">
+                🇲🇾 六年级历史互动学习游戏 (单元一至单元三)
+            </div>
+            <h1 class="text-3xl sm:text-5xl font-black text-indigo-950 mb-3 tracking-tight">
+                时空穿梭：<span class="text-amber-500">大马历史大闯关</span>
+            </h1>
+            <p class="text-slate-600 text-sm sm:text-base max-w-2xl mx-auto mb-8">
+                欢迎来到历史时空局！挑战三大历史任务，解开州属名称的秘密、组建马来西亚联邦、并用《国家原则》守护社会和谐吧！
+            </p>
+
+            <!-- 关卡选择卡片网格 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8 text-left">
+                <!-- 关卡 1 -->
+                <div class="bg-gradient-to-br from-blue-50 to-indigo-100 border-2 border-indigo-200 rounded-2xl p-5 flex flex-col justify-between hover:border-indigo-400 transition">
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-3xl floating">🚢</span>
+                            <span id="badge-lvl1" class="bg-indigo-600 text-white text-xs font-bold px-2.5 py-1 rounded-lg">单元一</span>
+                        </div>
+                        <h3 class="text-xl font-black text-indigo-950 mb-1">第一关：1963建国之路</h3>
+                        <p class="text-xs sm:text-sm text-slate-600 mb-4">
+                            操控时空收集器！接住<strong>参组马来西亚的邦属与功臣</strong>，躲避外部威胁与未加入的国家！
+                        </p>
+                    </div>
+                    <button onclick="startLevel(1)" class="btn-bounce w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-md">
+                        ▶ 开始第一关
+                    </button>
+                </div>
+
+                <!-- 关卡 2 -->
+                <div class="bg-gradient-to-br from-emerald-50 to-teal-100 border-2 border-emerald-200 rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-400 transition">
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-3xl floating" style="animation-delay: 0.4s;">🧩</span>
+                            <span id="badge-lvl2" class="bg-emerald-600 text-white text-xs font-bold px-2.5 py-1 rounded-lg">单元二</span>
+                        </div>
+                        <h3 class="text-xl font-black text-emerald-950 mb-1">第二关：州名解码消消乐</h3>
+                        <p class="text-xs sm:text-sm text-slate-600 mb-4">
+                            漂流的椰子、银灿灿的鱼、高脚玻璃杯……将<strong>马来西亚各州属</strong>与它们的名称由来配对消除！
+                        </p>
+                    </div>
+                    <button onclick="startLevel(2)" class="btn-bounce w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow-md">
+                        ▶ 开始第二关
+                    </button>
+                </div>
+
+                <!-- 关卡 3 -->
+                <div class="bg-gradient-to-br from-amber-50 to-orange-100 border-2 border-amber-200 rounded-2xl p-5 flex flex-col justify-between hover:border-amber-400 transition">
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-3xl floating" style="animation-delay: 0.8s;">🛡️</span>
+                            <span id="badge-lvl3" class="bg-amber-600 text-white text-xs font-bold px-2.5 py-1 rounded-lg">单元三</span>
+                        </div>
+                        <h3 class="text-xl font-black text-amber-950 mb-1">第三关：和谐守护者</h3>
+                        <p class="text-xs sm:text-sm text-slate-600 mb-4">
+                            面对社会危机与生活挑战，选出正确的<strong>《国家原则》与历史背景</strong>，发射团结光波！
+                        </p>
+                    </div>
+                    <button onclick="startLevel(3)" class="btn-bounce w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl shadow-md">
+                        ▶ 开始第三关
+                    </button>
+                </div>
+            </div>
+
+            <!-- 荣誉勋章栏 -->
+            <div class="bg-slate-100 rounded-2xl p-4 flex flex-wrap items-center justify-center gap-4 text-sm text-slate-600">
+                <span class="font-bold text-slate-800">🏆 你的历史勋章：</span>
+                <span id="medal-1" class="opacity-40 bg-white px-3 py-1 rounded-full border border-slate-300">🎖️ 建国先驱</span>
+                <span id="medal-2" class="opacity-40 bg-white px-3 py-1 rounded-full border border-slate-300">🗺️ 州属解码王</span>
+                <span id="medal-3" class="opacity-40 bg-white px-3 py-1 rounded-full border border-slate-300">🤝 团结大使</span>
+            </div>
+        </section>
+
+        <!-- ==================== 1. 第一关：建国元素接接乐 (Canvas 互动游戏) ==================== -->
+        <section id="screen-level1" class="hidden game-card rounded-3xl p-4 sm:p-6">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-3 gap-2">
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-black text-indigo-950">🚢 第一关：1963 建国元素收集战</h2>
+                    <p class="text-xs sm:text-sm text-slate-600">
+                        左右移动宝箱（鼠标/手指滑动/方向键），接住<span class="text-emerald-600 font-bold">【参组邦属/建国机构/功臣】</span>，躲开<span class="text-red-600 font-bold">【拒绝加入/外部威胁】</span>！
+                    </p>
+                </div>
+                <div class="bg-indigo-100 text-indigo-900 font-black px-4 py-2 rounded-xl text-sm whitespace-nowrap">
+                    进度：<span id="lvl1-progress">0</span> / 10
+                </div>
+            </div>
+
+            <!-- 实时知识点提示条 -->
+            <div id="lvl1-toast" class="mb-3 bg-indigo-50 border border-indigo-200 text-indigo-900 px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-center min-h-[38px] flex items-center justify-center">
+                💡 提示：1963年9月16日，马来亚联合邦、砂拉越、沙巴和新加坡正式组成马来西亚！
+            </div>
+
+            <!-- 响应式 Canvas 容器 -->
+            <div id="canvas-container" class="relative w-full h-[380px] sm:h-[420px] rounded-2xl overflow-hidden border-4 border-indigo-900 bg-gradient-to-b from-sky-900 via-indigo-900 to-slate-900 shadow-inner touch-none">
+                <canvas id="gameCanvas"></canvas>
+            </div>
+
+            <!-- 移动端触控辅助按钮 -->
+            <div class="mt-4 flex justify-center gap-6 sm:hidden">
+                <button id="btn-left" class="bg-indigo-600 active:bg-indigo-800 text-white font-black text-2xl px-8 py-3 rounded-2xl shadow-lg">⬅️</button>
+                <button id="btn-right" class="bg-indigo-600 active:bg-indigo-800 text-white font-black text-2xl px-8 py-3 rounded-2xl shadow-lg">➡️</button>
+            </div>
+        </section>
+
+        <!-- ==================== 2. 第二关：州名解码消消乐 ==================== -->
+        <section id="screen-level2" class="hidden game-card rounded-3xl p-5 sm:p-8">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-2">
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-black text-emerald-950">🧩 第二关：州名解码消消乐</h2>
+                    <p class="text-xs sm:text-sm text-slate-600">先点击左侧的【州属/直辖区】，再点击右侧对应的【名称由来线索】进行配对！</p>
+                </div>
+                <div class="bg-emerald-100 text-emerald-900 font-black px-4 py-2 rounded-xl text-sm">
+                    第 <span id="lvl2-round">1</span> / 2 轮
+                </div>
+            </div>
+
+            <!-- 配对成功后的历史小百科展示 -->
+            <div id="lvl2-fact-box" class="mb-5 bg-emerald-50 border-l-4 border-emerald-500 p-3.5 rounded-r-xl text-xs sm:text-sm text-emerald-900 font-medium">
+                🔍 点击任意卡片开始解码马来西亚各州属的古老传说与文献记载！
+            </div>
+
+            <!-- 左右配对区域 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                <!-- 左侧：州属名称 -->
+                <div class="space-y-3">
+                    <div class="text-xs font-bold uppercase tracking-wider text-slate-400 text-center">📍 州属 / 联邦直辖区</div>
+                    <div id="lvl2-left-col" class="space-y-2.5"></div>
+                </div>
+                <!-- 右侧：名称由来 -->
+                <div class="space-y-3">
+                    <div class="text-xs font-bold uppercase tracking-wider text-slate-400 text-center">📜 名称由来与传说</div>
+                    <div id="lvl2-right-col" class="space-y-2.5"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 3. 第三关：国家原则·和谐守护者 ==================== -->
+        <section id="screen-level3" class="hidden game-card rounded-3xl p-5 sm:p-8">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-2">
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-black text-amber-950">🛡️ 第三关：国家原则 · 和谐守护者</h2>
+                    <p class="text-xs sm:text-sm text-slate-600">阅读历史背景或生活危机事件，选择最正确的《国家原则》理念来化解危机！</p>
+                </div>
+                <div class="bg-amber-100 text-amber-900 font-black px-4 py-2 rounded-xl text-sm">
+                    任务：<span id="lvl3-qnum">1</span> / 6
+                </div>
+            </div>
+
+            <!-- 危机与历史情景卡片 -->
+            <div class="bg-gradient-to-r from-slate-800 to-slate-900 text-white rounded-2xl p-5 sm:p-6 mb-6 shadow-lg relative overflow-hidden">
+                <div class="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-2">
+                    <span id="lvl3-tag" class="bg-amber-500/20 border border-amber-400/40 px-2.5 py-0.5 rounded-md">历史事件</span>
+                </div>
+                <h3 id="lvl3-question" class="text-lg sm:text-xl font-bold leading-relaxed">
+                    题目加载中...
+                </h3>
+            </div>
+
+            <!-- 选项网格 -->
+            <div id="lvl3-options" class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-4">
+                <!-- 动态生成按钮 -->
+            </div>
+
+            <!-- 答题解析反馈框 -->
+            <div id="lvl3-feedback" class="hidden rounded-2xl p-4 text-sm font-medium mt-4"></div>
+        </section>
+
+    </main>
+
+    <!-- ==================== 自定义弹窗模态框 (替代 alert) ==================== -->
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl transform transition-all scale-100">
+            <div id="modal-emoji" class="text-6xl mb-3">🎉</div>
+            <h3 id="modal-title" class="text-2xl font-black text-slate-900 mb-2">恭喜过关！</h3>
+            <p id="modal-desc" class="text-slate-600 text-sm sm:text-base mb-6 leading-relaxed">
+                你成功完成了历史挑战！
+            </p>
+            <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                <button id="modal-btn-secondary" onclick="closeModalAndMenu()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-3 px-6 rounded-xl transition">
+                    返回大厅
+                </button>
+                <button id="modal-btn-primary" class="btn-bounce bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg">
+                    继续挑战
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           1. 游戏全局状态与音效系统 (Tone.js)
+           ========================================================================== */
+        const gameState = {
+            score: 0,
+            lives: 3,
+            currentLevel: 0,
+            soundEnabled: true,
+            completedLevels: { 1: false, 2: false, 3: false }
+        };
+
+        // 初始化 Tone.js 合成器音效
+        let synth = null;
+        function playSound(type) {
+            if (!gameState.soundEnabled) return;
+            try {
+                if (!synth) {
+                    synth = new Tone.PolySynth(Tone.Synth).toDestination();
+                    synth.volume.value = -8;
+                }
+                if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+                const now = Tone.now();
+                if (type === 'good') {
+                    synth.triggerAttackRelease(['C5', 'E5', 'G5'], '16n', now);
+                } else if (type === 'bad') {
+                    synth.triggerAttackRelease(['F3', 'E3'], '8n', now);
+                } else if (type === 'win') {
+                    synth.triggerAttackRelease(['C5', 'E5', 'G5', 'C6'], '8n', now);
+                } else if (type === 'click') {
+                    synth.triggerAttackRelease('A4', '32n', now);
+                }
+            } catch (e) {
+                // 忽略音频自动播放策略限制
+            }
+        }
+
+        function toggleSound() {
+            gameState.soundEnabled = !gameState.soundEnabled;
+            document.getElementById('sound-toggle').innerText = gameState.soundEnabled ? '🔊' : '🔇';
+        }
+
+        function updateHUD() {
+            document.getElementById('hud-score').innerText = gameState.score;
+            document.getElementById('hud-lives').innerText = gameState.lives;
+            // 更新勋章状态
+            [1, 2, 3].forEach(lvl => {
+                if (gameState.completedLevels[lvl]) {
+                    const medal = document.getElementById(`medal-${lvl}`);
+                    medal.classList.remove('opacity-40', 'border-slate-300');
+                    medal.classList.add('opacity-100', 'border-amber-400', 'bg-amber-50', 'text-amber-900', 'font-bold', 'shadow-sm');
+                }
+            });
+        }
+
+        function showModal(emoji, title, desc, primaryText, primaryAction) {
+            document.getElementById('modal-emoji').innerText = emoji;
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-desc').innerText = desc;
+            const primaryBtn = document.getElementById('modal-btn-primary');
+            primaryBtn.innerText = primaryText;
+            primaryBtn.onclick = () => {
+                document.getElementById('modal-overlay').classList.add('hidden');
+                if (primaryAction) primaryAction();
+            };
+            document.getElementById('modal-overlay').classList.remove('hidden');
+        }
+
+        function closeModalAndMenu() {
+            document.getElementById('modal-overlay').classList.add('hidden');
+            returnToMenu();
+        }
+
+        function hideAllScreens() {
+            stopLevel1Loop();
+            ['screen-menu', 'screen-level1', 'screen-level2', 'screen-level3'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+        }
+
+        function returnToMenu() {
+            playSound('click');
+            hideAllScreens();
+            document.getElementById('top-hud').classList.add('hidden');
+            document.getElementById('screen-menu').classList.remove('hidden');
+            updateHUD();
+        }
+
+        function startLevel(lvl) {
+            playSound('click');
+            hideAllScreens();
+            gameState.currentLevel = lvl;
+            gameState.lives = 3;
+            updateHUD();
+
+            document.getElementById('top-hud').classList.remove('hidden');
+            if (lvl === 1) {
+                document.getElementById('hud-level-title').innerText = '第一关：1963建国之路';
+                document.getElementById('screen-level1').classList.remove('hidden');
+                initLevel1();
+            } else if (lvl === 2) {
+                document.getElementById('hud-level-title').innerText = '第二关：州名解码消消乐';
+                document.getElementById('screen-level2').classList.remove('hidden');
+                initLevel2();
+            } else if (lvl === 3) {
+                document.getElementById('hud-level-title').innerText = '第三关：和谐守护者';
+                document.getElementById('screen-level3').classList.remove('hidden');
+                initLevel3();
+            }
+        }
+
+        /* ==========================================================================
+           2. 第一关逻辑：Canvas 1963建国元素收集战 (单元一知识)
+           ========================================================================== */
+        let canvas, ctx, animId, spawnTimer;
+        let player = { x: 0, y: 0, width: 90, height: 48, speed: 8 };
+        let fallingItems = [];
+        let lvl1Collected = 0;
+        let keys = { left: false, right: false };
+        let isLevel1Running = false;
+
+        // 紧扣 PDF 单元一资料的掉落物题库
+        const lvl1Pool = [
+            // 正确物品 (isGood: true)
+            { text: '🇲🇾 马来亚联合邦', isGood: true, fact: '✅ 正确！马来亚联合邦是成立马来西亚的核心邦属之一。' },
+            { text: '🌴 砂拉越', isGood: true, fact: '✅ 正确！砂拉越于1963年9月16日正式参组马来西亚。' },
+            { text: '🏔️ 沙巴(北婆罗洲)', isGood: true, fact: '✅ 正确！葛波委员会调查显示三分之二砂沙人民支持成立马来西亚。' },
+            { text: '🦁 新加坡', isGood: true, fact: '✅ 正确！新加坡在1963年参组马来西亚（后于1965年退出）。' },
+            { text: '👨‍💼 东姑阿都拉曼', isGood: true, fact: '✅ 正确！东姑阿都拉曼于1961年5月27日在艾德菲酒店提出成立马来西亚概念。' },
+            { text: '📋 葛波委员会', isGood: true, fact: '✅ 正确！葛波委员会(Suruhanjaya Cobbold)负责收集砂沙民意。' },
+            { text: '🤝 忠诚委员会JSKM', isGood: true, fact: '✅ 正确！敦莫哈末弗亚史蒂芬倡议成立JSKM以加强砂沙领袖信心。' },
+            { text: '📜 马来西亚协定', isGood: true, fact: '✅ 正确！1963年7月9日在伦敦马尔伯勒大楼签署《马来西亚协定》。' },
+            { text: '🎖️ 敦天猛公朱加', isGood: true, fact: '✅ 正确！砂拉越保守党(PESAKA)领袖，签署《马来西亚协定》的代表之一。' },
+            { text: '🎖️ 敦拿督慕斯达法', isGood: true, fact: '✅ 正确！沙统(USNO)领袖，向沙巴人民解释成立马来西亚的缘由。' },
+            // 错误/干扰物品 (isGood: false)
+            { text: '❌ 汶莱(拒绝加入)', isGood: false, fact: '⚠️ 注意！汶莱最终拒绝加入马来西亚！' },
+            { text: '⚔️ 印尼对抗政策', isGood: false, fact: '⚠️ 警报！1963-1966年印度尼西亚对马来西亚采取“对抗政策”(Konfrontasi)！' },
+            { text: '📢 菲律宾索讨沙巴', isGood: false, fact: '⚠️ 警报！菲律宾曾控诉沙巴为其领土的一部分，这是外部挑战！' },
+            { text: '🚫 砂人联党反对', isGood: false, fact: '⚠️ 警报！砂拉越人民联合党(SUPP)曾反对成立马来西亚！' },
+            { text: '💣 共产主义威胁', isGood: false, fact: '⚠️ 警报！抵御新加坡和砂拉越的共产主义威胁正是成立马来西亚的原因之一！' }
+        ];
+
+        function initLevel1() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            const container = document.getElementById('canvas-container');
+            
+            function resizeCanvas() {
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+                player.y = canvas.height - 62;
+                if (player.x === 0) player.x = canvas.width / 2 - player.width / 2;
+            }
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            lvl1Collected = 0;
+            fallingItems = [];
+            document.getElementById('lvl1-progress').innerText = lvl1Collected;
+            document.getElementById('lvl1-toast').innerText = '💡 提示：左右移动金色宝箱，收集10个建国元素即可过关！';
+            isLevel1Running = true;
+
+            // 鼠标与触控滑动控制
+            const moveHandler = (clientX) => {
+                if (!isLevel1Running) return;
+                const rect = canvas.getBoundingClientRect();
+                const relX = clientX - rect.left;
+                player.x = Math.max(0, Math.min(canvas.width - player.width, relX - player.width / 2));
+            };
+            canvas.onmousemove = (e) => moveHandler(e.clientX);
+            canvas.ontouchmove = (e) => {
+                e.preventDefault();
+                moveHandler(e.touches[0].clientX);
+            };
+
+            // 定时器生成掉落物
+            clearInterval(spawnTimer);
+            spawnTimer = setInterval(() => {
+                if (!isLevel1Running) return;
+                const template = lvl1Pool[Math.floor(Math.random() * lvl1Pool.length)];
+                const itemWidth = 148;
+                fallingItems.push({
+                    x: Math.random() * Math.max(10, canvas.width - itemWidth),
+                    y: -40,
+                    width: itemWidth,
+                    height: 38,
+                    speed: 2.3 + Math.random() * 1.4,
+                    ...template
+                });
+            }, 1350);
+
+            gameLoopLevel1();
+        }
+
+        function stopLevel1Loop() {
+            isLevel1Running = false;
+            cancelAnimationFrame(animId);
+            clearInterval(spawnTimer);
+        }
+
+        function gameLoopLevel1() {
+            if (!isLevel1Running) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制背景装饰星星与年份水印
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+            ctx.font = '900 72px "Noto Sans SC", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('1963.09.16', canvas.width / 2, canvas.height / 2 + 20);
+
+            // 键盘/按钮移动
+            if (keys.left) player.x = Math.max(0, player.x - player.speed);
+            if (keys.right) player.x = Math.min(canvas.width - player.width, player.x + player.speed);
+
+            // 绘制玩家宝箱
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.roundRect(player.x, player.y, player.width, player.height, 12);
+            ctx.fill();
+            ctx.strokeStyle = '#fef3c7';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 14px "Noto Sans SC", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('🏛️ 建国宝箱', player.x + player.width / 2, player.y + 29);
+
+            // 更新与绘制掉落物品
+            for (let i = fallingItems.length - 1; i >= 0; i--) {
+                const item = fallingItems[i];
+                item.y += item.speed;
+
+                // 绘制胶囊卡片
+                ctx.fillStyle = item.isGood ? '#10b981' : '#ef4444';
+                ctx.beginPath();
+                ctx.roundRect(item.x, item.y, item.width, item.height, 10);
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 13px "Noto Sans SC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(item.text, item.x + item.width / 2, item.y + 24);
+
+                // 碰撞检测
+                if (
+                    item.x < player.x + player.width &&
+                    item.x + item.width > player.x &&
+                    item.y < player.y + player.height &&
+                    item.y + item.height > player.y
+                ) {
+                    const toast = document.getElementById('lvl1-toast');
+                    toast.innerText = item.fact;
+
+                    if (item.isGood) {
+                        playSound('good');
+                        lvl1Collected++;
+                        gameState.score += 100;
+                        toast.className = 'mb-3 bg-emerald-100 border border-emerald-400 text-emerald-950 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-center min-h-[38px] flex items-center justify-center';
+                        document.getElementById('lvl1-progress').innerText = lvl1Collected;
+                    } else {
+                        playSound('bad');
+                        gameState.lives--;
+                        toast.className = 'mb-3 bg-red-100 border border-red-400 text-red-950 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-center min-h-[38px] flex items-center justify-center';
+                    }
+
+                    updateHUD();
+                    fallingItems.splice(i, 1);
+
+                    // 判断胜负
+                    if (gameState.lives <= 0) {
+                        stopLevel1Loop();
+                        showModal('💥', '挑战失败！', '小心避开“印尼对抗政策”、“汶莱拒绝加入”等阻碍因素哦！再来一次吧！', '重新挑战第一关', () => startLevel(1));
+                        return;
+                    }
+                    if (lvl1Collected >= 10) {
+                        stopLevel1Loop();
+                        playSound('win');
+                        gameState.completedLevels[1] = true;
+                        updateHUD();
+                        showModal('🎖️', '第一关通关！获得【建国先驱】勋章', '太棒了！你已掌握马来西亚成立的参组邦属（马来亚联合邦、砂拉越、沙巴、新加坡）与重要历史进程！', '进入第二关：州名解码', () => startLevel(2));
+                        return;
+                    }
+                    continue;
+                }
+
+                // 超出底部移除
+                if (item.y > canvas.height) {
+                    fallingItems.splice(i, 1);
+                }
+            }
+
+            animId = requestAnimationFrame(gameLoopLevel1);
+        }
+
+        // 键盘事件监听
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+        });
+
+        // 移动端按钮监听
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
+        btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); keys.left = true; });
+        btnLeft.addEventListener('touchend', () => keys.left = false);
+        btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); keys.right = true; });
+        btnRight.addEventListener('touchend', () => keys.right = false);
+
+        /* ==========================================================================
+           3. 第二关逻辑：州名解码消消乐 (单元二知识)
+           ========================================================================== */
+        const statePairsRounds = [
+            // 第一轮 (6组)
+            [
+                { id: 'perlis', state: '🥥 玻璃市 (Perlis)', clue: '源自暹罗文 prow-lowy（漂流的椰子）', detail: '玻璃市名称相传源自暹罗文“漂流的椰子”，也源自马来文“获得”(peroleh)。' },
+                { id: 'kedah', state: '🐘 吉打 (Kedah)', clue: '源自 Kheddah（捕象陷阱）或 Qadah（高脚杯）', detail: '淡米尔文也记载吉打为“kadaram”或“kalagam”。' },
+                { id: 'penang', state: '🌴 槟城 (Pulau Pinang)', clue: '原名 Pulo Ka Satu，源自岛上的槟榔树', detail: '吉打马来人曾称槟城为槟榔角 (Tanjong Penaga)。' },
+                { id: 'perak', state: '🐟 霹雳 (Perak)', clue: '马来文意为“银”，指水里银灿灿的鱼或锡米', detail: '霹雳盛产银灿灿的锡米，河水里也有银灿灿的鱼。' },
+                { id: 'melaka', state: '🦌 马六甲 (Melaka)', clue: '源自阿拉伯语 Malakat（商人汇集的市场）', detail: '也源自拜里米苏拉看见白鼠鹿踢猎狗时所靠的马六甲树。' },
+                { id: 'johor', state: '💎 柔佛 (Johor)', clue: '源自阿拉伯语 Jauhar（价值昂贵的珠宝）', detail: '根据《马来纪年》，柔佛也被称为乌绒丹纳 (Ujong Tanah)。' }
+            ],
+            // 第二轮 (6组)
+            [
+                { id: 'negeri9', state: '9️⃣ 森美兰 (Negeri Sembilan)', clue: '由双溪乌绒、日叻务、林茂等九个小州联合组成', detail: '“Negeri”一词源自米南加保语的“nagari”。' },
+                { id: 'pahang', state: '🌳 彭亨 (Pahang)', clue: '源自麻坑树，古称“因陀罗补罗”(Inderapura)', detail: '《马来纪年》中记载彭亨被称为因陀罗补罗或补罗（城市）。' },
+                { id: 'terengganu', state: '🦷 登嘉楼 (Terengganu)', clue: '源自 taring anu（杜蓉岛发现的巨大獠牙）', detail: '也源自“terangnya ganu”，与美丽的彩虹有关。' },
+                { id: 'kelantan', state: '✨ 吉兰丹 (Kelantan)', clue: '源自 kilatan（北大年马来人眼中的明亮之光）', detail: '也与早期沿海生长的野生白千树 (Gelam Hutan) 有关。' },
+                { id: 'sabah', state: '🍌 沙巴 (Sabah)', clue: '源自西部沿海作为食物来源的“沙巴蕉”', detail: '1877年历史文献《沙巴的摩诃罗阁》中也记载了沙巴的名称。' },
+                { id: 'kl', state: '⛏️ 吉隆坡 (Kuala Lumpur)', clue: '鹅麦河与巴生河采锡矿导致河口堆满泥巴', detail: '纳闽源自船只停泊的港口(labuhan)；布城源自东姑阿都拉曼布特拉。' }
+            ]
+        ];
+
+        let lvl2RoundIdx = 0;
+        let selectedLeft = null;
+        let selectedRight = null;
+        let matchedCount = 0;
+
+        function initLevel2() {
+            lvl2RoundIdx = 0;
+            renderLevel2Round();
+        }
+
+        function renderLevel2Round() {
+            selectedLeft = null;
+            selectedRight = null;
+            matchedCount = 0;
+            document.getElementById('lvl2-round').innerText = lvl2RoundIdx + 1;
+            document.getElementById('lvl2-fact-box').innerText = '🔍 请先点击左边的一个州属，再点击右边对应的名称由来！';
+
+            const pairs = statePairsRounds[lvl2RoundIdx];
+            const leftCol = document.getElementById('lvl2-left-col');
+            const rightCol = document.getElementById('lvl2-right-col');
+            leftCol.innerHTML = '';
+            rightCol.innerHTML = '';
+
+            // 打乱右侧顺序
+            const shuffledRight = [...pairs].sort(() => Math.random() - 0.5);
+
+            pairs.forEach(item => {
+                const btn = document.createElement('button');
+                btn.className = 'match-item w-full text-left bg-white border-2 border-slate-200 hover:border-emerald-400 p-3.5 rounded-xl font-bold text-slate-800 shadow-sm text-sm sm:text-base';
+                btn.innerText = item.state;
+                btn.dataset.id = item.id;
+                btn.onclick = () => handleSelectLeft(btn, item);
+                leftCol.appendChild(btn);
+            });
+
+            shuffledRight.forEach(item => {
+                const btn = document.createElement('button');
+                btn.className = 'match-item w-full text-left bg-white border-2 border-slate-200 hover:border-emerald-400 p-3.5 rounded-xl font-medium text-slate-700 shadow-sm text-xs sm:text-sm';
+                btn.innerText = item.clue;
+                btn.dataset.id = item.id;
+                btn.onclick = () => handleSelectRight(btn, item);
+                rightCol.appendChild(btn);
+            });
+        }
+
+        function handleSelectLeft(btn, item) {
+            playSound('click');
+            document.querySelectorAll('#lvl2-left-col .match-item').forEach(el => el.classList.remove('match-selected'));
+            btn.classList.add('match-selected');
+            selectedLeft = { btn, item };
+            checkLevel2Match();
+        }
+
+        function handleSelectRight(btn, item) {
+            playSound('click');
+            document.querySelectorAll('#lvl2-right-col .match-item').forEach(el => el.classList.remove('match-selected'));
+            btn.classList.add('match-selected');
+            selectedRight = { btn, item };
+            checkLevel2Match();
+        }
+
+        function checkLevel2Match() {
+            if (!selectedLeft || !selectedRight) return;
+
+            if (selectedLeft.item.id === selectedRight.item.id) {
+                // 配对成功
+                playSound('good');
+                selectedLeft.btn.classList.remove('match-selected');
+                selectedRight.btn.classList.remove('match-selected');
+                selectedLeft.btn.classList.add('match-solved');
+                selectedRight.btn.classList.add('match-solved');
+
+                gameState.score += 150;
+                matchedCount++;
+                updateHUD();
+
+                document.getElementById('lvl2-fact-box').innerHTML = `✅ <strong>解码成功！</strong> ${selectedLeft.item.detail}`;
+
+                selectedLeft = null;
+                selectedRight = null;
+
+                // 检查本轮是否全部完成
+                if (matchedCount === statePairsRounds[lvl2RoundIdx].length) {
+                    if (lvl2RoundIdx === 0) {
+                        setTimeout(() => {
+                            lvl2RoundIdx = 1;
+                            renderLevel2Round();
+                        }, 1100);
+                    } else {
+                        setTimeout(() => {
+                            playSound('win');
+                            gameState.completedLevels[2] = true;
+                            updateHUD();
+                            showModal('🗺️', '第二关通关！获得【州属解码王】勋章', '太厉害了！你已经完全掌握了马来西亚各州属与联邦直辖区的名称由来！准备好迎接最终挑战了吗？', '进入第三关：和谐守护者', () => startLevel(3));
+                        }, 800);
+                    }
+                }
+            } else {
+                // 配对错误
+                playSound('bad');
+                const lBtn = selectedLeft.btn;
+                const rBtn = selectedRight.btn;
+                lBtn.classList.add('match-error');
+                rBtn.classList.add('match-error');
+                gameState.lives--;
+                updateHUD();
+
+                document.getElementById('lvl2-fact-box').innerHTML = `❌ <strong>线索不匹配！</strong> 再仔细回想一下课本里的名称由来哦！`;
+
+                setTimeout(() => {
+                    lBtn.classList.remove('match-selected', 'match-error');
+                    rBtn.classList.remove('match-selected', 'match-error');
+                }, 450);
+
+                selectedLeft = null;
+                selectedRight = null;
+
+                if (gameState.lives <= 0) {
+                    setTimeout(() => {
+                        showModal('😵', '生命值耗尽！', '别灰心，重新理清各州属的关键词（如银鱼、高脚杯、沙巴蕉）再试一次！', '重新挑战第二关', () => startLevel(2));
+                    }, 500);
+                }
+            }
+        }
+
+        /* ==========================================================================
+           4. 第三关逻辑：国家原则 · 和谐守护者 (单元三知识)
+           ========================================================================== */
+        const rukunQuestions = [
+            {
+                tag: '历史背景 (1969年)',
+                q: '1969年5月13日发生严重的种族冲突事件后，政府成立了哪两个理事会来恢复国家安定并制定《国家原则》？',
+                options: [
+                    '国家行动理事会 (MAGERAN) 与 国家协商理事会 (MAPEN)',
+                    '马来西亚忠诚委员会 (JSKM) 与 葛波委员会',
+                    '跨政府委员会 (JAK) 与 联合国调查团 (UNMM)',
+                    '海峡殖民地理事会 与 马来亚联合邦内阁'
+                ],
+                answer: 0,
+                explain: '事件过后政府成立“国家行动理事会 (MAGERAN)”接管治理，并在1970年于“国家协商理事会 (MAPEN)”的建议下制定《国家原则》。'
+            },
+            {
+                tag: '历史日期',
+                q: '首相在哪一天正式颁布《国家原则》(Rukun Negara)，当天也恰好是马来西亚独立13周年庆典？',
+                options: [
+                    '1963年9月16日',
+                    '1970年8月31日',
+                    '1969年5月13日',
+                    '1957年8月31日'
+                ],
+                answer: 1,
+                explain: '1970年8月31日（马来西亚独立13周年庆典当天），首相正式颁布了《国家原则》。'
+            },
+            {
+                tag: '社会危机诊断',
+                q: '在制定《国家原则》之前，不同种族集中在不同的居住区（马来人居乡村、华人居城市、印度人居种植园）。这造成了什么问题？',
+                options: [
+                    '气候变化导致农作物减产',
+                    '种族之间交流有限，导致误解与隔阂',
+                    '各国领袖拒绝签署马来西亚协定',
+                    '州属名称出现严重混淆'
+                ],
+                answer: 1,
+                explain: '居住地区的分化使得各族交流有限，从而产生误解与隔阂，这也是制定《国家原则》的原因之一。'
+            },
+            {
+                tag: '五大原则实战',
+                q: '【生活情景】大伟认为自己家境富裕，开车时经常闯红灯，还说“法律管不到我”。他违背了《国家原则》的哪一项？',
+                options: [
+                    '信奉上苍 (Kepercayaan kepada Tuhan)',
+                    '尊崇法治 (Kedaulatan Undang-undang)',
+                    '忠于君国 (Kesetiaan kepada Raja dan Negara)',
+                    '善用现代科技'
+                ],
+                answer: 1,
+                explain: '“尊崇法治”强调人人平等，没有人可以凌驾在法律之上，所有人都必须守法以维护社会秩序。'
+            },
+            {
+                tag: '五大原则实战',
+                q: '【生活情景】同学们在网络聊天室里互相尊重彼此的文化与宗教习俗，说话有礼貌、不恶言相向。这体现了哪一项国家原则？',
+                options: [
+                    '培养德行 (Kesopanan dan Kesusilaan)',
+                    '维护宪法 (Keluhuran Perlembagaan)',
+                    '平衡族群结构',
+                    '加快独立步伐'
+                ],
+                answer: 0,
+                explain: '“培养德行”提倡礼貌、互相尊重与文明的行为，鼓励国民建立和谐的人际关系。'
+            },
+            {
+                tag: '宪法与君主立宪',
+                q: '《国家原则》中的第二条与第三条原则，强调国民必须尊重国家元首、巩固君主立宪制度，并遵守国家的最高法律。这两条原则是：',
+                options: [
+                    '忠于君国 & 维护宪法',
+                    '信奉上苍 & 培养德行',
+                    '促进团结 & 维护民主',
+                    '尊崇法治 & 创造公平社会'
+                ],
+                answer: 0,
+                explain: '第二条“忠于君国”巩固君主立宪制度；第三条“维护宪法”强调宪法是国家的最高法律，保障人民基本权利。'
+            }
+        ];
+
+        let lvl3Index = 0;
+        let lvl3Locked = false;
+
+        function initLevel3() {
+            lvl3Index = 0;
+            renderLevel3Question();
+        }
+
+        function renderLevel3Question() {
+            lvl3Locked = false;
+            const current = rukunQuestions[lvl3Index];
+            document.getElementById('lvl3-qnum').innerText = lvl3Index + 1;
+            document.getElementById('lvl3-tag').innerText = current.tag;
+            document.getElementById('lvl3-question').innerText = current.q;
+
+            const feedback = document.getElementById('lvl3-feedback');
+            feedback.classList.add('hidden');
+
+            const optionsBox = document.getElementById('lvl3-options');
+            optionsBox.innerHTML = '';
+
+            const letters = ['A', 'B', 'C', 'D'];
+            current.options.forEach((optText, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'btn-bounce text-left bg-white border-2 border-slate-200 hover:border-amber-500 p-4 rounded-2xl font-bold text-slate-800 shadow-sm flex items-start gap-3 transition';
+                btn.innerHTML = `
+                    <span class="bg-amber-100 text-amber-800 font-black px-2.5 py-0.5 rounded-lg text-sm shrink-0">${letters[idx]}</span>
+                    <span class="text-sm sm:text-base">${optText}</span>
+                `;
+                btn.onclick = () => handleLevel3Answer(idx, btn);
+                optionsBox.appendChild(btn);
+            });
+        }
+
+        function handleLevel3Answer(selectedIdx, btnElement) {
+            if (lvl3Locked) return;
+            lvl3Locked = true;
+
+            const current = rukunQuestions[lvl3Index];
+            const feedback = document.getElementById('lvl3-feedback');
+            const allBtns = document.querySelectorAll('#lvl3-options button');
+
+            if (selectedIdx === current.answer) {
+                playSound('good');
+                btnElement.classList.remove('border-slate-200');
+                btnElement.classList.add('bg-emerald-50', 'border-emerald-500', 'text-emerald-950');
+                gameState.score += 200;
+                updateHUD();
+
+                feedback.className = 'rounded-2xl p-4 text-sm font-medium mt-4 bg-emerald-100 border border-emerald-400 text-emerald-950';
+                feedback.innerHTML = `✨ <strong>回答正确！团结能量 +200！</strong><br>${current.explain}`;
+            } else {
+                playSound('bad');
+                btnElement.classList.remove('border-slate-200');
+                btnElement.classList.add('bg-red-50', 'border-red-500', 'text-red-950');
+                // 高亮正确答案
+                allBtns[current.answer].classList.add('bg-emerald-50', 'border-emerald-500');
+                gameState.lives--;
+                updateHUD();
+
+                feedback.className = 'rounded-2xl p-4 text-sm font-medium mt-4 bg-red-100 border border-red-400 text-red-950';
+                feedback.innerHTML = `⚠️ <strong>答错啦！</strong><br>${current.explain}`;
+            }
+
+            feedback.classList.remove('hidden');
+
+            // 添加“下一题”按钮
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'mt-3 bg-slate-900 hover:bg-slate-800 text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow transition block ml-auto';
+            nextBtn.innerText = lvl3Index < rukunQuestions.length - 1 ? '下一题 ➔' : '查看最终战绩 🏆';
+            nextBtn.onclick = () => {
+                if (gameState.lives <= 0) {
+                    showModal('💔', '守护失败！', '生命值已用完，重新温习《国家原则》五大原则再来挑战吧！', '重新挑战第三关', () => startLevel(3));
+                    return;
+                }
+                if (lvl3Index < rukunQuestions.length - 1) {
+                    lvl3Index++;
+                    renderLevel3Question();
+                } else {
+                    playSound('win');
+                    gameState.completedLevels[3] = true;
+                    updateHUD();
+                    showModal(
+                        '🏆',
+                        '全关卡通关！历史大师诞生！',
+                        `恭喜你完成了《时空穿梭：大马历史大闯关》所有挑战！你的最终总分为：${gameState.score} 分！继续保持对马来西亚历史的热爱吧！`,
+                        '返回荣誉大厅',
+                        () => returnToMenu()
+                    );
+                }
+            };
+            feedback.appendChild(nextBtn);
+        }
+    </script>
+</body>
+</html>
